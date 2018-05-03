@@ -308,6 +308,7 @@
 			i, j, guessesOffset;
 
 		for (i = 0; i < offsetsLength; i++) {
+            console.log(guesses[offsets[i]]);
 			guessesOffset = guesses[offsets[i].offset] || {};
 			for (j in guessesOffset) {
 				if (guessesOffset.hasOwnProperty(j)) {
@@ -331,6 +332,7 @@
 		try {
 			var intlName = Intl.DateTimeFormat().resolvedOptions().timeZone;
 			if (intlName && intlName.length > 3) {
+				console.log('NAMES=', names);
 				var name = names[normalizeName(intlName)];
 				if (name) {
 					return name;
@@ -346,6 +348,9 @@
 			guesses = guessesForUserOffsets(offsets),
 			zoneScores = [],
 			zoneScore, i, j;
+
+        console.log(offsets);
+        console.log(guesses);
 
 		for (i = 0; i < guesses.length; i++) {
 			zoneScore = new ZoneScore(getZone(guesses[i]), offsetsLength);
@@ -377,6 +382,8 @@
 
 	function addZone (packed) {
 		var i, name, split, normalized;
+
+        console.log('adding zone');
 
 		if (typeof packed === "string") {
 			packed = [packed];
@@ -481,11 +488,18 @@
 		moment.tz namespace
 	************************************/
 
+    /**
+	 * Examples of use:
+	 * moment.tz('2018-01-01', 'UTC')
+	 * moment('2018-01-01').tz('UTC')
+     * @param input
+     * @returns {*}
+     */
 	function tz (input) {
 		var args = Array.prototype.slice.call(arguments, 0, -1),
-			name = arguments[arguments.length - 1],
-			zone = getZone(name),
-			out  = moment.utc.apply(null, args);
+			name = arguments[arguments.length - 1], // last argument is a timezone
+			zone = getZone(name), // find a timezone
+			out  = moment.utc.apply(null, args); // build moment object
 
 		if (zone && !moment.isMoment(input) && needsOffset(out)) {
 			out.add(zone.parse(out), 'minutes');
@@ -525,30 +539,60 @@
 
 	moment.defaultZone = null;
 
+    /**
+	 * This function
+	 * 1) sets _z property of Moment object when Moment object is just created
+     * @param mom
+     * @param keepTime
+     */
 	moment.updateOffset = function (mom, keepTime) {
-		var zone = moment.defaultZone,
+		var defaultZone = moment.defaultZone,
 			offset;
 
+        //console.log('updateOffset', JSON.stringify({_z: mom._z && mom._z.name, keepTime, _isUTC: mom._isUTC, _d: mom._d, _a: mom._a}));
+
 		if (mom._z === undefined) {
-			if (zone && needsOffset(mom) && !mom._isUTC) {
+			if (defaultZone && needsOffset(mom) && !mom._isUTC) {
+				const orig = mom._d;
 				mom._d = moment.utc(mom._a)._d;
-				mom.utc().add(zone.parse(mom), 'minutes');
+				mom.utc().add(defaultZone.parse(mom), 'minutes');
+				if (mom._d !== orig) {
+                    console.log(`Changed _d from ${orig} to ${mom._d}`);
+				}
 			}
-			mom._z = zone;
+			mom._z = defaultZone;
+            console.log('set zone to ', mom._z && mom._z.name);
 		}
-		if (mom._z) {
+
+        if (mom._z) {
+			// Get which UTC offset is in zone _z at the moment mom
+			// Offset is a number of minutes
 			offset = mom._z.utcOffset(mom);
+			console.log(`Offset at ${mom.toString()} is ${offset}`);
+
 			if (Math.abs(offset) < 16) {
 				offset = offset / 60;
 			}
+			if (-offset !== mom._offset) {
+				keepTime = true;
+			}
+
+			console.log(`Offset update ${mom._z.name} ${mom._offset} -> ${-offset}update offset keepTime=${!!keepTime}`);
 			if (mom.utcOffset !== undefined) {
 				mom.utcOffset(-offset, keepTime);
 			} else {
 				mom.zone(offset, keepTime);
 			}
 		}
-	};
 
+        //console.log('updatedOffset', JSON.stringify({_z: mom._z && mom._z.name, keepTime, _isUTC: mom._isUTC, _d: mom._d, _a: mom._a}));
+        //console.log(mom._offset);
+    };
+
+	/**
+	 * This is a method of the Moment object
+	 * It returns a moment in a provided timezone
+	 */
 	fn.tz = function (name, keepTime) {
 		if (name) {
 			this._z = getZone(name);
